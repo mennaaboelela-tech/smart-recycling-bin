@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Recycling Bin - Grade 3-C</title>
+
+  <style>
+    body{
+      margin:0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #e6f7f1, #eef6ff);
+      color:#1f2937;
+      text-align:center;
+    }
+
+    .container{
+      max-width:900px;
+      margin:26px auto;
+      background:#ffffff;
+      padding:20px;
+      border-radius:18px;
+      box-shadow:0 10px 25px rgba(0,0,0,0.12);
+    }
+
+    .title{
+      margin:6px 0 6px;
+      font-size:28px;
+      color:#047857; /* green */
+      font-weight:800;
+    }
+
+    .sub{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#0369a1; /* blue */
+      line-height:1.5;
+    }
+
+    .row{
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+
+    .card{
+      flex:1 1 320px;
+      background:#f9fafb;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:16px;
+    }
+
+    button{
+      padding:12px 18px;
+      border:0;
+      border-radius:12px;
+      background: linear-gradient(135deg,#16a34a,#0ea5e9);
+      color:#ffffff;
+      font-weight:bold;
+      font-size:15px;
+      cursor:pointer;
+    }
+
+    button:disabled{
+      background:#9ca3af;
+      cursor:not-allowed;
+    }
+
+    #webcam-container canvas{
+      width:100%;
+      max-width:420px;
+      border-radius:12px;
+      border:1px solid #e5e7eb;
+      background:#e5e7eb;
+    }
+
+    .big{
+      font-size:18px;
+      font-weight:800;
+      margin:12px 0 6px;
+      color:#0f172a;
+    }
+
+    .label{
+      text-align:left;
+      max-width:420px;
+      margin:0 auto;
+      font-size:14px;
+      line-height:1.6;
+      color:#111827;
+    }
+
+    .note{
+      font-size:13px;
+      color:#065f46;
+      background:#ecfdf5;
+      border:1px solid #a7f3d0;
+      padding:10px;
+      border-radius:10px;
+      margin-top:12px;
+      text-align:left;
+      line-height:1.5;
+    }
+
+    .footer{
+      margin-top:16px;
+      font-size:12px;
+      color:#047857;
+      font-weight:700;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="title"> Smart Recycling Bin</h1>
+    <p class="sub">
+      Grade 3-C Science Fair Project<br/>
+      By Khadija, Rihanna, and Ayla
+    </p>
+
+    <div class="row">
+      <div class="card">
+        <h3 style="margin-top:0; color:#0369a1;">How to Use</h3>
+        <ol style="text-align:left; margin:0; line-height:1.7; font-size:14px;">
+          <li>Press <b>Start Camera</b>.</li>
+          <li>Allow camera access.</li>
+          <li>Show the item to the camera.</li>
+          <li>Read the result: Paper / Plastic / Metal.</li>
+          <li>Throw it in the correct recycling bin.</li>
+        </ol>
+
+        <div class="note">
+          Tip: This works best when the page is opened from a real website (HTTPS),
+          not from a local file like C:/Users/...
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0; color:#0369a1;">AI Scanner</h3>
+        <p style="margin-top:0; font-size:13px; color:#374151;">
+          Click the button and show the item to the camera.
+        </p>
+
+        <button id="startBtn" onclick="init()">Start Camera</button>
+
+        <div style="height:12px;"></div>
+        <div id="webcam-container"></div>
+
+        <div class="big" id="finalResult">Result: —</div>
+        <div class="label" id="label-container"></div>
+      </div>
+    </div>
+
+    <div class="footer">Scan an item • Let AI decide • Recycle correctly</div>
+  </div>
+
+  <!-- Teachable Machine libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    // Your Teachable Machine model base link:
+    const URL = "https://teachablemachine.withgoogle.com/models/at4U801ou/";
+
+    let model, webcam, labelContainer, maxPredictions;
+    let isRunning = false;
+
+    async function init() {
+      if (isRunning) return;
+
+      const startBtn = document.getElementById("startBtn");
+      startBtn.disabled = true;
+      startBtn.textContent = "Loading...";
+
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+
+      // Load the model
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+
+      // Setup webcam
+      const flip = true;
+      webcam = new tmImage.Webcam(360, 270, flip);
+
+      try {
+        await webcam.setup();   // request camera access
+        await webcam.play();
+      } catch (e) {
+        startBtn.disabled = false;
+        startBtn.textContent = "Start Camera";
+        document.getElementById("finalResult").textContent =
+          "Result: Camera permission blocked.";
+        return;
+      }
+
+      isRunning = true;
+      startBtn.textContent = "Camera On";
+
+      window.requestAnimationFrame(loop);
+
+      // Show webcam
+      const webcamContainer = document.getElementById("webcam-container");
+      webcamContainer.innerHTML = "";
+      webcamContainer.appendChild(webcam.canvas);
+
+      // Prediction labels
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+    }
+
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+
+      // Find the top class
+      let top = prediction[0];
+      for (const p of prediction) {
+        if (p.probability > top.probability) top = p;
+      }
+
+      // Update labels list
+      for (let i = 0; i < maxPredictions; i++) {
+        const p = prediction[i];
+        const percent = (p.probability * 100).toFixed(1);
+        labelContainer.childNodes[i].innerHTML = `${p.className}: ${percent}%`;
+      }
+
+      // Show final result (simple)
+      const className = top.className;
+      const percent = (top.probability * 100).toFixed(0);
+
+      document.getElementById("finalResult").textContent =
+        `Result: ${className} (${percent}%)`;
+    }
+  </script>
+</body>
+</html>
